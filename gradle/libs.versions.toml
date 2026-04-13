@@ -8,7 +8,7 @@ ezXHelper = "2.2.1"
 haze = "1.6.10"
 kotlin = "2.2.21"
 miuix = "0.6.1"
-super-lyric-api = "2.4"
+super-lyric-api = "3.4"
 xposed = "82"
 
 [libraries]

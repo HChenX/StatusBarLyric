@@ -35,7 +35,6 @@ import android.graphics.Point
 import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
@@ -58,14 +57,14 @@ import com.github.kyuubiran.ezxhelper.HookFactory.`-Static`.createHook
 import com.github.kyuubiran.ezxhelper.ObjectHelper.Companion.objectHelper
 import com.github.kyuubiran.ezxhelper.finders.ConstructorFinder.`-Static`.constructorFinder
 import com.github.kyuubiran.ezxhelper.finders.MethodFinder.`-Static`.methodFinder
-import com.hchen.superlyricapi.ISuperLyric
+import com.hchen.superlyricapi.ISuperLyricReceiver
 import com.hchen.superlyricapi.SuperLyricData
-import com.hchen.superlyricapi.SuperLyricTool
-import com.hchen.superlyricapi.SuperLyricTool.base64ToBitmap
+import com.hchen.superlyricapi.SuperLyricHelper
 import statusbar.lyric.R
 import statusbar.lyric.config.XposedOwnSP.config
 import statusbar.lyric.hook.BaseHook
 import statusbar.lyric.hook.module.xiaomi.XiaomiHooks
+import statusbar.lyric.tools.BitmapTool.base64ToBitmap
 import statusbar.lyric.tools.LogTools.log
 import statusbar.lyric.tools.LyricViewTools
 import statusbar.lyric.tools.LyricViewTools.cancelAnimation
@@ -524,8 +523,6 @@ class SystemUILyric : BaseHook() {
         autoHideController!!.callMethod("touchAutoHide")
     }
 
-    private var lastArtist: String = ""
-    private var lastAlbum: String = ""
     private var playingApp: String = ""
     private var updateConfig: UpdateConfig = UpdateConfig()
     private var screenLockReceiver: ScreenLockReceiver = ScreenLockReceiver()
@@ -543,19 +540,17 @@ class SystemUILyric : BaseHook() {
     private var lastRunnable: Runnable? = null
     private val showTitleConsumer: Consumer<SuperLyricData> = object : Consumer<SuperLyricData> {
         override fun accept(value: SuperLyricData) {
-            if (!isMusicPlaying || playingApp != value.packageName) return
-
-            this@SystemUILyric.title = value.title
+            if (!isMusicPlaying) return
+            this@SystemUILyric.title = value.title!!
         }
     }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun registerSuperLyric(context: Context) {
-        SuperLyricTool.registerSuperLyric(context, object : ISuperLyric.Stub() {
-            override fun onStop(data: SuperLyricData?) {
+        SuperLyricHelper.registerReceiver(object : ISuperLyricReceiver.Stub() {
+            override fun onStop(publisher: String?, data: SuperLyricData?) {
                 if (data.isNull() || !isReady) return
-                if (data?.playbackState?.state == PlaybackState.STATE_BUFFERING) return
-                if (playingApp.isNotEmpty() && playingApp != data?.packageName) return
+                if (playingApp.isNotEmpty() && playingApp != publisher) return
 
                 isMusicPlaying = false
                 lastLyric = ""
@@ -565,31 +560,30 @@ class SystemUILyric : BaseHook() {
                 if (handler.hasMessages(timeoutRestore)) handler.removeMessages(timeoutRestore)
             }
 
-            override fun onSuperLyric(data: SuperLyricData?) {
+            override fun onLyric(publisher: String?, data: SuperLyricData?) {
                 if (data == null) return
                 if (!isReady) return
 
                 isMusicPlaying = true
-                playingApp = data.packageName
+                playingApp = publisher!!
 
-                if (config.titleSwitch && data.isExistMediaMetadata && data.title.isNotEmpty()) {
-                    if (lastArtist != data.artist || lastAlbum != data.album) {
-                        lastArtist = data.artist
-                        lastAlbum = data.album
-
+                if (config.titleSwitch && data.hasTitle()) {
+                    if (title != data.title) {
                         if (lastRunnable.isNotNull()) handler.removeCallbacks(lastRunnable!!)
                         lastRunnable = Runnable { showTitleConsumer.accept(data) }
                         if (lastRunnable.isNotNull()) handler.postDelayed(lastRunnable!!, 800)
-                        ("Title: " + data.title + ", Artist: " + lastArtist + ", Album: " + lastAlbum).log()
+                        ("Title: " + data.title).log()
                     }
                 }
 
-                if (data.lyric.isEmpty()) return
-                lastLyric = data.lyric
+                if (!data.hasLyric()) return
+                lastLyric = data.lyric!!.text
                 "Lyric: $lastLyric".log()
 
-                changeIcon(data.base64Icon)
-                updateLyricState(delay = data.delay)
+                if (data.hasBase64Icon()) {
+                    changeIcon(data.base64Icon!!)
+                }
+                updateLyricState(delay = data.lyric!!.delay.toInt())
 
                 if (handler.hasMessages(timeoutRestore)) {
                     handler.removeMessages(timeoutRestore)

@@ -25,8 +25,8 @@ android {
         applicationId = "statusbar.lyric"
         minSdk = 36
         targetSdk = 36
-        versionCode = 800
-        versionName = "8.0.0"
+        versionCode = 801
+        versionName = "8.0.1"
         buildConfigField("long", "BUILD_TIME", "$buildTime")
         buildConfigField("int", "COMPOSE_CONFIG_VERSION", "1")
     }
