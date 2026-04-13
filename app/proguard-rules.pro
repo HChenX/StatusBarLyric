@@ -25,3 +25,5 @@
 -dontskipnonpubliclibraryclassmembers
 -allowaccessmodification
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*,!code/allocation/variable
+-dontwarn android.os.ServiceManager
+-dontwarn statusbar.lyric.tools.BitmapTool
